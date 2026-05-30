@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../../utils/id';
 import { useSessionStore } from '../../stores/sessionStore';
 import { INDIA_THEMES } from '../../constants/themes';
 import Constants from 'expo-constants';
@@ -73,7 +73,7 @@ export default function FocusSessionScreen() {
   const theme = INDIA_THEMES.find(t => t.id === themeId) || INDIA_THEMES[0];
 
   // ── State ──
-  const [sessionId] = useState(() => uuidv4());
+  const [sessionId] = useState(() => generateId());
   const [phase, setPhase] = useState<'work' | 'break' | 'complete'>('work');
   const [currentCycle, setCurrentCycle] = useState(1);
   const [timeRemaining, setTimeRemaining] = useState(workDuration * 60);

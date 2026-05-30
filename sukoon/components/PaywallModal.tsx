@@ -3,9 +3,15 @@ import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIn
 import { useTranslation } from '../hooks/useTranslation';
 import { Ionicons } from '@expo/vector-icons';
 import { PLANS } from '../constants/pricing';
-import RazorpayCheckout from 'react-native-razorpay';
+import { IS_EXPO_GO } from '../services/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { syncService } from '../services/sync';
+
+// react-native-razorpay requires native modules — guard for Expo Go
+let RazorpayCheckout: any = null;
+if (!IS_EXPO_GO) {
+  try { RazorpayCheckout = require('react-native-razorpay').default; } catch (_) {}
+}
 
 interface PaywallModalProps {
   visible: boolean;
@@ -19,26 +25,34 @@ export const PaywallModal = ({ visible, onClose }: PaywallModalProps) => {
   const [loading, setLoading] = useState(false);
 
   const handleCheckout = async () => {
+    if (IS_EXPO_GO || !RazorpayCheckout) {
+      alert('Payments require a development build. In Expo Go, your subscription is simulated locally for testing.');
+      // Simulate a successful subscription for UI testing
+      useAuthStore.getState().setSubscription({
+        plan: selectedPlan,
+        status: 'active',
+        expiresAt: selectedPlan === 'lifetime' ? null : Date.now() + 30 * 24 * 60 * 60 * 1000,
+        isActive: true
+      });
+      onClose();
+      return;
+    }
+
     if (!user) {
       alert("Please sign in to subscribe.");
       onClose();
       return;
     }
-    
+
     setLoading(true);
     try {
       const plan = PLANS[selectedPlan];
-      // In a real app, you would call your backend to create an order first
-      // const response = await fetch('https://your-backend.com/createOrder', { ... })
-      // const order = await response.json();
-
-      // Dummy Razorpay Options (Using Test Key)
       const options = {
         description: plan.name,
         image: 'https://your-logo-url.png',
         currency: plan.currency,
-        key: 'rzp_test_YOUR_KEY_HERE', 
-        amount: plan.price * 100, // Amount in paise
+        key: 'rzp_test_YOUR_KEY_HERE',
+        amount: plan.price * 100,
         name: 'Sukoon',
         prefill: {
           email: user.email || '',
@@ -49,26 +63,17 @@ export const PaywallModal = ({ visible, onClose }: PaywallModalProps) => {
       };
 
       RazorpayCheckout.open(options).then(async (data: any) => {
-        // Handle success
-        alert(`Success: ${data.razorpay_payment_id}`);
-        // Here you would normally send the signature to your backend to verify
-        // and then update the user's subscription in Firestore
-        
-        // Mock update for now
         useAuthStore.getState().setSubscription({
           plan: selectedPlan,
           status: 'active',
           expiresAt: selectedPlan === 'lifetime' ? null : Date.now() + 30 * 24 * 60 * 60 * 1000,
           isActive: true
         });
-
         if (user.uid) await syncService.syncLocalDataToFirebase(user.uid);
-        
         setLoading(false);
         onClose();
       }).catch((error: any) => {
-        // Handle failure
-        alert(`Error: ${error.code} | ${error.description}`);
+        alert(`Payment failed: ${error.description || 'Unknown error'}`);
         setLoading(false);
       });
     } catch (e) {

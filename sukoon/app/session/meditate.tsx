@@ -6,7 +6,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSessionStore } from '../../stores/sessionStore';
 import { MEDITATIONS } from '../../constants/meditations';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../../utils/id';
 import { useUserStore } from '../../stores/userStore';
 
 const { width, height } = Dimensions.get('window');
@@ -41,7 +41,7 @@ export default function MeditateSessionScreen() {
   const { updateStreakFromSession } = useUserStore();
 
   // ── State ──
-  const [sessionId] = useState(() => uuidv4());
+  const [sessionId] = useState(() => generateId());
   const [phase, setPhase] = useState<'loading' | 'playing' | 'paused' | 'complete'>('loading');
   const [progress, setProgress] = useState(0); // 0 to 1
   const [soundObject, setSoundObject] = useState<any>(null);

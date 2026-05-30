@@ -8,14 +8,9 @@ import * as SplashScreen from 'expo-splash-screen';
 import '../global.css';
 import { View, Text, StyleSheet } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Constants from 'expo-constants';
-import auth from '@react-native-firebase/auth';
+import { IS_EXPO_GO, firebaseAuth } from '../services/firebase';
 import { useAuthStore } from '../stores/authStore';
 import { syncService } from '../services/sync';
-
-// expo-notifications throws a module-level (uncatchable) error in Expo Go SDK 53+
-// So we must guard with an environment check BEFORE requiring it
-const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,34 +29,29 @@ export default function RootLayout() {
   useEffect(() => {
     loadAppSettings();
     loadUserData();
-    
-    // Auth Listener
-    const subscriber = auth().onAuthStateChanged(async (user) => {
-      setAuthUser(user);
-      if (user) {
-        // Run cloud sync when user is detected
-        await syncService.syncFromFirebase(user.uid);
-      }
-    });
-    return subscriber; // unsubscribe on unmount
+
+    // Firebase Auth Listener — only in real builds
+    if (!IS_EXPO_GO && firebaseAuth) {
+      const subscriber = firebaseAuth().onAuthStateChanged(async (user: any) => {
+        setAuthUser(user);
+        if (user) {
+          await syncService.syncFromFirebase(user.uid);
+        }
+      });
+      return subscriber; // unsubscribe on unmount
+    }
   }, []);
 
   useEffect(() => {
     if (!fontsLoaded) return;
-    
+
     SplashScreen.hideAsync();
 
     const inTabsGroup = segments[0] === '(tabs)';
     const inOnboarding = segments[0] === 'onboarding';
     const inAuth = segments[0] === 'auth';
 
-    // Wait a tick for router to be ready
     setTimeout(() => {
-      // Logic:
-      // 1. If not authenticated and not guest -> Auth Welcome
-      // 2. If authenticated or guest, but onboarding not complete -> Onboarding
-      // 3. If authenticated or guest, and onboarding complete -> Tabs
-      
       const hasAccess = isAuthenticated || isGuest;
 
       if (!hasAccess && !inAuth) {
@@ -76,13 +66,10 @@ export default function RootLayout() {
   }, [fontsLoaded, onboardingComplete, isAuthenticated, isGuest]);
 
   const setupNotifications = async () => {
-    // Never touch expo-notifications in Expo Go — it throws at module level
-    if (isExpoGo) return;
+    if (IS_EXPO_GO) return; // expo-notifications throws at module-level in Expo Go
     try {
       const Notifications = require('expo-notifications');
       const enabledStr = await AsyncStorage.getItem('sukoon_notifications_enabled');
-      
-      // If we haven't asked yet, or they have it enabled
       if (enabledStr === null) {
         const { status } = await Notifications.requestPermissionsAsync();
         if (status === 'granted') {
@@ -99,9 +86,7 @@ export default function RootLayout() {
           await AsyncStorage.setItem('sukoon_notifications_enabled', 'false');
         }
       }
-    } catch (e) {
-      // ignore
-    }
+    } catch (_) {}
   };
 
   if (!fontsLoaded) {

@@ -7,7 +7,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle, Path } from 'react-native-svg';
-import { v4 as uuidv4 } from 'uuid';
+import { generateId } from '../../utils/id';
 import { useSessionStore } from '../../stores/sessionStore';
 import { BREATHING_TECHNIQUES } from '../../constants/breathing';
 
@@ -23,7 +23,7 @@ export default function BreatheSessionScreen() {
   const technique = BREATHING_TECHNIQUES.find(t => t.id === techniqueId) || BREATHING_TECHNIQUES[0];
 
   // Session State
-  const [sessionId] = useState(() => uuidv4());
+  const [sessionId] = useState(() => generateId());
   const [phaseIndex, setPhaseIndex] = useState(0);
   const [currentRound, setCurrentRound] = useState(1);
   const [totalRounds] = useState(5); // Default to 5

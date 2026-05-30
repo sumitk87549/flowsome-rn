@@ -1,6 +1,5 @@
 import { create } from 'zustand';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { firebaseAuth, GoogleSignin, IS_EXPO_GO } from '../services/firebase';
 
 export type SubscriptionStatus = {
   plan: 'free' | 'monthly' | 'annual' | 'lifetime' | 'student';
@@ -10,26 +9,22 @@ export type SubscriptionStatus = {
 };
 
 interface AuthState {
-  user: FirebaseAuthTypes.User | null;
+  user: any | null;  // FirebaseAuthTypes.User when available
   isAuthenticated: boolean;
   isGuest: boolean;
   subscription: SubscriptionStatus | null;
   isLoading: boolean;
-  
-  // Actions
+
   signInWithGoogle: () => Promise<void>;
   signInWithEmail: (email: string, pass: string) => Promise<void>;
   signUpWithEmail: (name: string, email: string, pass: string) => Promise<void>;
   signOut: () => Promise<void>;
   continueAsGuest: () => void;
-  setAuthUser: (user: FirebaseAuthTypes.User | null) => void;
+  setAuthUser: (user: any | null) => void;
   setSubscription: (sub: SubscriptionStatus | null) => void;
 }
 
-// In production, configure this in your app entry point
-// GoogleSignin.configure({ webClientId: 'YOUR_WEB_CLIENT_ID' });
-
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
   isGuest: false,
@@ -45,45 +40,43 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   signInWithGoogle: async () => {
+    if (IS_EXPO_GO || !GoogleSignin || !firebaseAuth) {
+      throw new Error('Google Sign-In requires a development build. Use "Continue as Guest" to explore the app in Expo Go.');
+    }
     try {
       set({ isLoading: true });
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-      const signInResult = await GoogleSignin.signIn();
-      let idToken = signInResult.data?.idToken;
+      const result = await GoogleSignin.signIn();
+      const idToken = result.data?.idToken;
       if (!idToken) throw new Error('No ID token found');
-      
-      const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-      await auth().signInWithCredential(googleCredential);
-    } catch (e) {
-      console.error(e);
-      throw e;
+      const credential = firebaseAuth.GoogleAuthProvider.credential(idToken);
+      await firebaseAuth().signInWithCredential(credential);
     } finally {
       set({ isLoading: false });
     }
   },
 
   signInWithEmail: async (email, password) => {
+    if (IS_EXPO_GO || !firebaseAuth) {
+      throw new Error('Sign-in requires a development build. Use "Continue as Guest" to explore the app in Expo Go.');
+    }
     try {
       set({ isLoading: true });
-      await auth().signInWithEmailAndPassword(email, password);
-    } catch (e) {
-      console.error(e);
-      throw e;
+      await firebaseAuth().signInWithEmailAndPassword(email, password);
     } finally {
       set({ isLoading: false });
     }
   },
 
   signUpWithEmail: async (name, email, password) => {
+    if (IS_EXPO_GO || !firebaseAuth) {
+      throw new Error('Sign-up requires a development build. Use "Continue as Guest" to explore the app in Expo Go.');
+    }
     try {
       set({ isLoading: true });
-      const userCred = await auth().createUserWithEmailAndPassword(email, password);
+      const userCred = await firebaseAuth().createUserWithEmailAndPassword(email, password);
       await userCred.user.updateProfile({ displayName: name });
-      // Force token refresh to pick up the new displayName
       await userCred.user.reload();
-    } catch (e) {
-      console.error(e);
-      throw e;
     } finally {
       set({ isLoading: false });
     }
@@ -92,13 +85,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   signOut: async () => {
     try {
       set({ isLoading: true });
-      await auth().signOut();
-      try {
-        await GoogleSignin.signOut();
-      } catch (e) {}
+      if (!IS_EXPO_GO && firebaseAuth) {
+        await firebaseAuth().signOut();
+      }
+      if (!IS_EXPO_GO && GoogleSignin) {
+        try { await GoogleSignin.signOut(); } catch (_) {}
+      }
       set({ user: null, isAuthenticated: false, isGuest: false, subscription: null });
-    } catch (e) {
-      console.error(e);
     } finally {
       set({ isLoading: false });
     }
