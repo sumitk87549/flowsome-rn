@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, Text, SafeAreaView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, View, Text } from 'react-native';
 import { GreetingCard } from '../../components/home/GreetingCard';
 import { StreakBanner } from '../../components/home/StreakBanner';
 import { MoodCheckIn } from '../../components/home/MoodCheckIn';

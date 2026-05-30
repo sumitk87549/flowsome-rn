@@ -2,6 +2,7 @@
   "expo": {
     "name": "Sukoon",
     "slug": "sukoon",
+    "scheme": "sukoon",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +30,8 @@
       "expo-router",
       "expo-font",
       "expo-status-bar",
-      "expo-splash-screen"
+      "expo-splash-screen",
+      ["expo-notifications", { "icon": "./assets/icon.png", "color": "#2D8B6F" }]
     ]
   }
 }

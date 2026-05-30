@@ -10,12 +10,16 @@ interface UserState {
   moodHistory: Array<{ mood: number, timestamp: string }>;
   selectedTimerMode: string;
   selectedBreathGoal: string;
+  totalFocusMinutes: number;
+  totalSessions: number;
+  weeklyActivity: { [dateString: string]: number };
   setOnboardingComplete: (complete: boolean) => void;
   setGoals: (goals: string[]) => void;
   setTimePreference: (time: string) => void;
   logMood: (mood: number) => void;
   setSelectedTimerMode: (mode: string) => void;
   setSelectedBreathGoal: (goal: string) => void;
+  updateStreakFromSession: () => void;
   loadFromStorage: () => Promise<void>;
   saveToStorage: () => Promise<void>;
 }
@@ -29,6 +33,9 @@ export const useUserStore = create<UserState>((set, get) => ({
   moodHistory: [],
   selectedTimerMode: 'classic',
   selectedBreathGoal: 'calm',
+  totalFocusMinutes: 0,
+  totalSessions: 0,
+  weeklyActivity: {},
 
   setOnboardingComplete: (complete) => {
     set({ onboardingComplete: complete });
@@ -53,6 +60,51 @@ export const useUserStore = create<UserState>((set, get) => ({
   },
   setSelectedBreathGoal: (goal) => {
     set({ selectedBreathGoal: goal });
+    get().saveToStorage();
+  },
+  updateStreakFromSession: () => {
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    const todayStr = today.toDateString();
+    
+    const state = get();
+    const lastSessionDate = state.lastSessionDate;
+    
+    // Update weekly activity
+    const newWeeklyActivity = { ...state.weeklyActivity };
+    newWeeklyActivity[todayStr] = (newWeeklyActivity[todayStr] || 0) + 1;
+    
+    let newStreak = state.streak;
+    
+    if (lastSessionDate === todayStr) {
+      // Already counted today
+    } else {
+      if (lastSessionDate) {
+        const lastDate = new Date(lastSessionDate);
+        lastDate.setHours(0,0,0,0);
+        const diffTime = Math.abs(today.getTime() - lastDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) {
+          // Consecutive day
+          newStreak += 1;
+        } else if (diffDays > 1) {
+          // Streak broken
+          newStreak = 1;
+        }
+      } else {
+        // First session ever
+        newStreak = 1;
+      }
+    }
+    
+    set({
+      streak: newStreak,
+      lastSessionDate: todayStr,
+      totalSessions: state.totalSessions + 1,
+      weeklyActivity: newWeeklyActivity
+    });
+    
     get().saveToStorage();
   },
 
@@ -80,6 +132,9 @@ export const useUserStore = create<UserState>((set, get) => ({
         moodHistory: state.moodHistory,
         selectedTimerMode: state.selectedTimerMode,
         selectedBreathGoal: state.selectedBreathGoal,
+        totalFocusMinutes: state.totalFocusMinutes,
+        totalSessions: state.totalSessions,
+        weeklyActivity: state.weeklyActivity,
       };
       await AsyncStorage.setItem('userData', JSON.stringify(dataToSave));
     } catch (e) {
