@@ -11,7 +11,11 @@
     "main": "expo-router/entry",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.sukoon.app"
+      "bundleIdentifier": "com.sukoon.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Required for breathing detection (optional feature)",
+        "NSUserNotificationsUsageDescription": "For daily focus reminders"
+      }
     },
     "android": {
       "package": "com.sukoon.app",
@@ -21,7 +25,12 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "VIBRATE",
+        "RECEIVE_BOOT_COMPLETED",
+        "WAKE_LOCK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -31,7 +40,17 @@
       "expo-font",
       "expo-status-bar",
       "expo-splash-screen",
-      ["expo-notifications", { "icon": "./assets/icon.png", "color": "#2D8B6F" }]
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#2D8B6F"
+        }
+      ],
+      "@react-native-firebase/app",
+      "@react-native-firebase/auth",
+      "@react-native-google-signin/google-signin",
+      "expo-build-properties"
     ]
   }
 }

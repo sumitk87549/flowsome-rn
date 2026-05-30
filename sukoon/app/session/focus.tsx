@@ -10,15 +10,19 @@ import Svg, { Circle } from 'react-native-svg';
 import { v4 as uuidv4 } from 'uuid';
 import { useSessionStore } from '../../stores/sessionStore';
 import { INDIA_THEMES } from '../../constants/themes';
+import Constants from 'expo-constants';
 
 const { width, height } = Dimensions.get('window');
 
 // ─── Safe wrappers for native-only modules ───────────────────────────────────
-// expo-notifications and expo-av are stripped from Expo Go (SDK 53+).
-// We load them dynamically so the JS bundle doesn't crash on import.
+// expo-notifications throws a MODULE-LEVEL error in Expo Go SDK 53+.
+// try/catch around require() is NOT enough — must check executionEnvironment first.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 let Notifications: any = null;
-try { Notifications = require('expo-notifications'); } catch (_) {}
+if (!isExpoGo) {
+  try { Notifications = require('expo-notifications'); } catch (_) {}
+}
 
 let audioManager: any = null;
 try { audioManager = require('../../utils/audio').audioManager; } catch (_) {}

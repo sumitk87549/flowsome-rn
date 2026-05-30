@@ -9,6 +9,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Badge } from '../../components/ui/Badge';
 import { useRouter } from 'expo-router';
+import { PaywallModal } from '../../components/PaywallModal';
+import { usePremiumGate } from '../../hooks/usePremiumGate';
 
 export const TIMER_MODES = [
   { id: 'classic', label: 'Classic', emoji: '🍅', work: 25, break: 5, longBreak: 30, cycles: 4 },
@@ -23,8 +25,11 @@ export default function FocusScreen() {
   const { t } = useTranslation();
   const router = useRouter();
   
+  const { hasAccess } = usePremiumGate();
+  
   const [selectedModeId, setSelectedModeId] = useState('classic');
   const [selectedThemeId, setSelectedThemeId] = useState(INDIA_THEMES[0].id);
+  const [paywallVisible, setPaywallVisible] = useState(false);
   
   // Custom mode state
   const [customWork, setCustomWork] = useState(25);
@@ -35,8 +40,8 @@ export default function FocusScreen() {
   const activeBreak = selectedModeId === 'custom' ? customBreak : selectedMode.break;
 
   const handleThemePress = (theme: typeof INDIA_THEMES[0]) => {
-    if (!theme.free) {
-      Alert.alert("Premium Environment", "Unlock all 8 environments with Sukoon Plus (Coming Soon in Stage 4)");
+    if (!theme.free && !hasAccess) {
+      setPaywallVisible(true);
       return;
     }
     setSelectedThemeId(theme.id);
@@ -163,6 +168,8 @@ export default function FocusScreen() {
         </Text>
         <Text style={[styles.noticeText, { color: colors.textTertiary }]}>Session saved automatically — even if app closes</Text>
       </View>
+
+      <PaywallModal visible={paywallVisible} onClose={() => setPaywallVisible(false)} />
     </SafeAreaView>
   );
 }
