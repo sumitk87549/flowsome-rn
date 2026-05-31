@@ -1,93 +1,153 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useRef, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { useTranslation } from '../../hooks/useTranslation';
 import { useUserStore } from '../../stores/userStore';
 import { useTheme } from '../../hooks/useTheme';
-import { Card } from '../ui/Card';
 import * as Haptics from 'expo-haptics';
 
 const MOODS = [
-  { value: 1, emoji: '😰', label: 'mood_very_stressed' },
-  { value: 2, emoji: '😟', label: 'mood_stressed' },
-  { value: 3, emoji: '😐', label: 'mood_neutral' },
-  { value: 4, emoji: '🙂', label: 'mood_good' },
-  { value: 5, emoji: '😄', label: 'mood_great' },
+  { value: 1, emoji: '😰', label: 'Stressed' },
+  { value: 2, emoji: '😟', label: 'Low' },
+  { value: 3, emoji: '😐', label: 'Okay' },
+  { value: 4, emoji: '🙂', label: 'Good' },
+  { value: 5, emoji: '😄', label: 'Great' },
 ];
 
 export const MoodCheckIn = () => {
   const { t } = useTranslation();
-  const { logMood } = useUserStore();
+  const { logMood, moodHistory } = useUserStore();
   const { colors } = useTheme();
   const [selectedMood, setSelectedMood] = useState<number | null>(null);
-  const [showLogged, setShowLogged] = useState(false);
+  const checkAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnims = useRef(MOODS.map(() => new Animated.Value(1))).current;
 
-  const handleMoodSelect = (value: number) => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    setSelectedMood(value);
-    logMood(value);
-    setShowLogged(true);
-    setTimeout(() => {
-      setShowLogged(false);
-    }, 1500);
+  // Check if already logged today
+  const hasLoggedToday = () => {
+    if (moodHistory.length === 0) return false;
+    const last = new Date(moodHistory[moodHistory.length - 1].timestamp);
+    return last.toDateString() === new Date().toDateString();
   };
 
+  const [alreadyLogged] = useState(hasLoggedToday());
+
+  const handleMoodSelect = (value: number, index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Bounce animation
+    Animated.sequence([
+      Animated.spring(scaleAnims[index], { toValue: 1.3, useNativeDriver: true, speed: 50, bounciness: 12 }),
+      Animated.spring(scaleAnims[index], { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 8 }),
+    ]).start();
+
+    setSelectedMood(value);
+    logMood(value);
+
+    // Show checkmark
+    Animated.spring(checkAnim, { toValue: 1, useNativeDriver: true, speed: 30, bounciness: 10 }).start();
+  };
+
+  if (alreadyLogged && !selectedMood) {
+    return (
+      <View style={[styles.loggedContainer, { backgroundColor: colors.primarySoft }]}>
+        <Text style={[styles.loggedText, { color: colors.primary }]}>✓ Mood logged today</Text>
+      </View>
+    );
+  }
+
   return (
-    <Card style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface }]}>
       <View style={styles.header}>
         <Text style={[styles.title, { color: colors.textPrimary }]}>{t('mood_question')}</Text>
-        {showLogged && <Text style={[styles.loggedText, { color: colors.success }]}>{t('logged')}</Text>}
+        <Animated.Text style={[styles.checkMark, { color: colors.success, opacity: checkAnim, transform: [{ scale: checkAnim }] }]}>
+          ✓
+        </Animated.Text>
       </View>
       <View style={styles.emojiRow}>
-        {MOODS.map((mood) => {
+        {MOODS.map((mood, index) => {
           const isSelected = selectedMood === mood.value;
           return (
             <TouchableOpacity
               key={mood.value}
               style={[
                 styles.emojiButton,
-                { backgroundColor: isSelected ? colors.accentLight : colors.border }
+                {
+                  backgroundColor: isSelected ? colors.primarySoft : 'transparent',
+                  borderColor: isSelected ? colors.primary : colors.border,
+                }
               ]}
-              onPress={() => handleMoodSelect(mood.value)}
+              onPress={() => handleMoodSelect(mood.value, index)}
+              activeOpacity={0.7}
             >
-              <Text style={styles.emoji}>{mood.emoji}</Text>
+              <Animated.Text style={[styles.emoji, { transform: [{ scale: scaleAnims[index] }] }]}>
+                {mood.emoji}
+              </Animated.Text>
+              <Text style={[styles.emojiLabel, { color: isSelected ? colors.primary : colors.textTertiary }]}>
+                {mood.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
       </View>
-    </Card>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    marginBottom: 20,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   title: {
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  loggedText: {
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  checkMark: {
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   emojiRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   emojiButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    justifyContent: 'center',
     alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    flex: 1,
+    marginHorizontal: 3,
   },
   emoji: {
-    fontSize: 24,
-  }
+    fontSize: 28,
+    marginBottom: 4,
+  },
+  emojiLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  // Already logged state
+  loggedContainer: {
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  loggedText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
 });

@@ -5,20 +5,46 @@ try {
   Audio = require('expo-av').Audio;
 } catch (_) {}
 
+// Per-theme ambient sound URLs (free CC0 from Pixabay)
+const THEME_AUDIO_URLS: Record<string, string> = {
+  ganga: 'https://cdn.pixabay.com/download/audio/2022/02/23/audio_ea70ad08e0.mp3',      // river water
+  rajasthan: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c25ca4ff.mp3',   // wind ambient
+  kerala: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_3489839ebf.mp3',       // rain
+  himalaya: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c25ca4ff.mp3',     // wind
+  mysore: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c25ca4ff.mp3',       // night ambient
+  coorg: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_3489839ebf.mp3',        // forest rain
+  mumbai: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_3489839ebf.mp3',       // city rain
+  spiti: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0c25ca4ff.mp3',        // deep silence
+};
+
+const CHIME_URL = 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3';
+const DEFAULT_AMBIENT = 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_3489839ebf.mp3';
+
 class AudioService {
   private ambientSound: any = null;
   private currentThemeId: string | null = null;
   private chimeSound: any = null;
+  private volume: number = 0.3;
 
   async loadThemeAudio(themeId: string) {
     if (!Audio) return;
     if (this.currentThemeId === themeId && this.ambientSound) return;
 
     await this.unloadAll();
+
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: false,
+      });
+    } catch (_) {}
+
+    const url = THEME_AUDIO_URLS[themeId] || DEFAULT_AMBIENT;
+
     try {
       const { sound } = await Audio.Sound.createAsync(
-        { uri: 'https://cdn.pixabay.com/download/audio/2022/03/10/audio_3489839ebf.mp3?filename=soft-rain-ambient-111154.mp3' },
-        { shouldPlay: false, isLooping: true, volume: 0.3 }
+        { uri: url },
+        { shouldPlay: false, isLooping: true, volume: this.volume }
       );
       this.ambientSound = sound;
       this.currentThemeId = themeId;
@@ -28,10 +54,19 @@ class AudioService {
   }
 
   async playAmbientSound(volume: number = 0.3) {
+    this.volume = volume;
     if (!this.ambientSound) return;
     try {
       await this.ambientSound.setVolumeAsync(volume);
       await this.ambientSound.playAsync();
+    } catch (e) {}
+  }
+
+  async setVolume(volume: number) {
+    this.volume = volume;
+    if (!this.ambientSound) return;
+    try {
+      await this.ambientSound.setVolumeAsync(volume);
     } catch (e) {}
   }
 
@@ -40,8 +75,8 @@ class AudioService {
     try {
       if (!this.chimeSound) {
         const { sound } = await Audio.Sound.createAsync(
-          { uri: 'https://cdn.pixabay.com/download/audio/2021/08/04/audio_0625c1539c.mp3?filename=tibetan-singing-bowl-1-43575.mp3' },
-          { shouldPlay: false, volume: 0.8 }
+          { uri: CHIME_URL },
+          { shouldPlay: false, volume: 0.6 }
         );
         this.chimeSound = sound;
       }
@@ -57,7 +92,7 @@ class AudioService {
       if (status.isLoaded && status.isPlaying) {
         const steps = 10;
         const stepTime = duration / steps;
-        const vol = status.volume;
+        const vol = status.volume || this.volume;
         for (let i = 1; i <= steps; i++) {
           await this.ambientSound.setVolumeAsync(Math.max(0, vol - (vol * (i / steps))));
           await new Promise(r => setTimeout(r, stepTime));

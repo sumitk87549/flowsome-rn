@@ -6,17 +6,16 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient as SvgGrad, Stop } from 'react-native-svg';
 import { generateId } from '../../utils/id';
 import { useSessionStore } from '../../stores/sessionStore';
+import { useUserStore } from '../../stores/userStore';
 import { INDIA_THEMES } from '../../constants/themes';
 import Constants from 'expo-constants';
 
 const { width, height } = Dimensions.get('window');
 
 // ─── Safe wrappers for native-only modules ───────────────────────────────────
-// expo-notifications throws a MODULE-LEVEL error in Expo Go SDK 53+.
-// try/catch around require() is NOT enough — must check executionEnvironment first.
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
 let Notifications: any = null;
@@ -27,7 +26,6 @@ if (!isExpoGo) {
 let audioManager: any = null;
 try { audioManager = require('../../utils/audio').audioManager; } catch (_) {}
 
-// Only configure the handler if the module loaded successfully
 if (Notifications) {
   try {
     Notifications.setNotificationHandler({
@@ -40,7 +38,6 @@ if (Notifications) {
   } catch (_) {}
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const safeNotify = {
   schedule: async (seconds: number, title: string, body: string) => {
     if (!Notifications) return;
@@ -63,6 +60,7 @@ export default function FocusSessionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { addFocusSession, updateFocusSession } = useSessionStore();
+  const { updateStreakFromSession } = useUserStore();
 
   const modeId = params.modeId as string;
   const themeId = params.themeId as string;
@@ -78,7 +76,6 @@ export default function FocusSessionScreen() {
   const [currentCycle, setCurrentCycle] = useState(1);
   const [timeRemaining, setTimeRemaining] = useState(workDuration * 60);
   const [isPaused, setIsPaused] = useState(false);
-  const [showControls, setShowControls] = useState(false);
   const [rating, setRating] = useState(0);
 
   // ── Refs ──
@@ -93,14 +90,16 @@ export default function FocusSessionScreen() {
   // ── Animations ──
   const bgAnim = useRef(new Animated.Value(0)).current;
   const particlesAnim = useRef(new Animated.Value(0)).current;
-  const controlsOpacity = useRef(new Animated.Value(0)).current;
   const fadeAnim = useRef(new Animated.Value(1)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const glowAnim = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
     StatusBar.setHidden(true);
 
     addFocusSession({
       id: sessionId,
+      type: 'focus',
       themeId: theme.id,
       mode: modeId,
       plannedDuration: workDuration,
@@ -140,14 +139,33 @@ export default function FocusSessionScreen() {
   }, []);
 
   const startAnimations = () => {
+    // Slow gradient shift
     Animated.loop(
       Animated.sequence([
         Animated.timing(bgAnim, { toValue: 1, duration: 60000, useNativeDriver: false }),
         Animated.timing(bgAnim, { toValue: 0, duration: 60000, useNativeDriver: false }),
       ])
     ).start();
+
+    // Particles float up
     Animated.loop(
-      Animated.timing(particlesAnim, { toValue: 1, duration: 20000, useNativeDriver: true })
+      Animated.timing(particlesAnim, { toValue: 1, duration: 25000, useNativeDriver: true })
+    ).start();
+
+    // Gentle pulse on ring
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1.03, duration: 4000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 4000, useNativeDriver: true }),
+      ])
+    ).start();
+
+    // Glow animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 0.6, duration: 3000, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.3, duration: 3000, useNativeDriver: true }),
+      ])
     ).start();
   };
 
@@ -172,7 +190,9 @@ export default function FocusSessionScreen() {
     }, 1000);
   };
 
-  const handleTimerEnd = (currentPhase: 'work' | 'break') => {
+  const handleTimerEnd = (currentPhase: 'work' | 'break' | 'complete') => {
+    if (currentPhase === 'complete') return;
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     if (audioManager) audioManager.playChime?.();
 
     if (currentPhase === 'work') {
@@ -190,6 +210,7 @@ export default function FocusSessionScreen() {
         phaseRef.current = 'complete';
         if (audioManager) audioManager.fadeAudioOut(2000);
         updateFocusSession(sessionId, { status: 'completed', endTime: Date.now() });
+        updateStreakFromSession();
       } else {
         Animated.timing(fadeAnim, { toValue: 0, duration: 400, useNativeDriver: true }).start(() => {
           const nextPhase = 'work';
@@ -210,23 +231,13 @@ export default function FocusSessionScreen() {
       isPausedRef.current = false;
       setIsPaused(false);
       safeNotify.schedule(pauseRemainingRef.current, 'Timer Update', 'Timer finished');
+      if (audioManager) audioManager.playAmbientSound(0.3);
     } else {
       pauseRemainingRef.current = timeRemaining;
       isPausedRef.current = true;
       setIsPaused(true);
       safeNotify.cancelAll();
-    }
-  };
-
-  const handleScreenTap = () => {
-    setShowControls(true);
-    Animated.timing(controlsOpacity, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-    if (!isPausedRef.current) {
-      setTimeout(() => {
-        Animated.timing(controlsOpacity, { toValue: 0, duration: 300, useNativeDriver: true }).start(
-          () => setShowControls(false)
-        );
-      }, 3000);
+      if (audioManager) audioManager.fadeAudioOut(500);
     }
   };
 
@@ -255,21 +266,25 @@ export default function FocusSessionScreen() {
   // ── Completion Screen ──
   if (phase === 'complete') {
     return (
-      <View style={[styles.container, { backgroundColor: '#1A3A5C' }]}>
+      <View style={[styles.container, { backgroundColor: '#0A0E16' }]}>
         <View style={styles.completeContent}>
           <Text style={styles.completeEmoji}>🎉</Text>
           <Text style={styles.completeTitle}>Session Complete!</Text>
-          <Text style={styles.completeStats}>Focused for {workDuration * totalCycles} min · {totalCycles} cycles</Text>
+          <Text style={styles.completeStats}>
+            Focused for {workDuration * totalCycles} min · {totalCycles} cycles
+          </Text>
+
           <View style={styles.ratingContainer}>
             <Text style={styles.ratingLabel}>How focused were you?</Text>
             <View style={styles.starsRow}>
               {[1, 2, 3, 4, 5].map(star => (
                 <TouchableOpacity key={star} onPress={() => { setRating(star); updateFocusSession(sessionId, { focusRating: star }); }}>
-                  <Ionicons name={rating >= star ? 'star' : 'star-outline'} size={40} color={rating >= star ? '#F4A44A' : 'rgba(255,255,255,0.3)'} />
+                  <Ionicons name={rating >= star ? 'star' : 'star-outline'} size={36} color={rating >= star ? '#F4A44A' : 'rgba(255,255,255,0.2)'} />
                 </TouchableOpacity>
               ))}
             </View>
           </View>
+
           <TouchableOpacity style={styles.returnBtn} onPress={() => router.back()}>
             <Text style={styles.returnBtnText}>Return Home</Text>
           </TouchableOpacity>
@@ -279,9 +294,11 @@ export default function FocusSessionScreen() {
   }
 
   // ── Progress Ring ──
-  const radius = 120;
+  const radius = 110;
+  const strokeWidth = 5;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (timeRemaining / totalTimeRef.current) * circumference;
+  const progressFraction = timeRemaining / totalTimeRef.current;
+  const strokeDashoffset = circumference - progressFraction * circumference;
 
   const bgColor = bgAnim.interpolate({
     inputRange: [0, 1],
@@ -290,24 +307,25 @@ export default function FocusSessionScreen() {
       : ['#1A3A5C', '#0F2035'],
   });
 
-  // Generate particles once (stable positions)
+  // Generate particles once
   const particles = useRef(
-    Array.from({ length: 20 }, () => ({
+    Array.from({ length: 40 }, () => ({
       cx: Math.random() * width,
       cy: Math.random() * (height + 200),
-      r: Math.random() * 2 + 1,
-      opacity: Math.random() * 0.5 + 0.1,
+      r: Math.random() * 2.5 + 0.5,
+      opacity: Math.random() * 0.4 + 0.1,
     }))
   ).current;
 
   return (
-    <TouchableOpacity activeOpacity={1} style={styles.container} onPress={handleScreenTap}>
+    <View style={styles.container}>
       {/* Background */}
       <Animated.View style={[styles.bgLayer, { backgroundColor: bgColor }]}>
         <Animated.View style={[styles.particlesLayer, {
           transform: [{
-            translateY: particlesAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -100] }),
+            translateY: particlesAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -150] }),
           }],
+          opacity: glowAnim,
         }]}>
           <Svg height={height + 200} width={width}>
             {particles.map((p, i) => (
@@ -320,87 +338,186 @@ export default function FocusSessionScreen() {
 
       {/* Main content */}
       <Animated.View style={[styles.mainContent, { opacity: fadeAnim }]}>
+        {/* Phase label at top */}
         <View style={styles.header}>
-          <Text style={styles.phaseLabel}>{phase === 'work' ? 'Focus' : 'Break'}</Text>
+          <Text style={styles.phaseLabel}>{phase === 'work' ? '🎯 Focus' : '☕ Break'}</Text>
           <View style={styles.cyclesRow}>
             {Array.from({ length: totalCycles }).map((_, i) => (
-              <View key={i} style={[styles.cycleDot, i < currentCycle - (phase === 'work' ? 1 : 0) && styles.cycleDotFilled]} />
+              <View key={i} style={[
+                styles.cycleDot,
+                i < currentCycle - (phase === 'work' ? 1 : 0) && styles.cycleDotFilled,
+                i === currentCycle - 1 && phase === 'work' && styles.cycleDotActive,
+              ]} />
             ))}
           </View>
         </View>
 
-        <View style={styles.timerContainer}>
-          <Svg height="300" width="300" viewBox="0 0 300 300">
-            <Circle cx="150" cy="150" r={radius} stroke="rgba(255,255,255,0.15)" strokeWidth="6" fill="none" />
+        {/* Timer Ring */}
+        <Animated.View style={[styles.timerContainer, { transform: [{ scale: pulseAnim }] }]}>
+          <Svg height="280" width="280" viewBox="0 0 280 280">
+            <Defs>
+              <SvgGrad id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor="rgba(255,255,255,0.5)" />
+                <Stop offset="1" stopColor="rgba(255,255,255,0.15)" />
+              </SvgGrad>
+            </Defs>
+            {/* Background ring */}
+            <Circle cx="140" cy="140" r={radius} stroke="rgba(255,255,255,0.08)" strokeWidth={strokeWidth} fill="none" />
+            {/* Progress ring */}
             <Circle
-              cx="150" cy="150" r={radius}
-              stroke="rgba(255,255,255,0.8)" strokeWidth="6" fill="none"
+              cx="140" cy="140" r={radius}
+              stroke="url(#ringGrad)" strokeWidth={strokeWidth} fill="none"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round" rotation="-90" origin="150, 150"
+              strokeLinecap="round" rotation="-90" origin="140, 140"
             />
           </Svg>
           <View style={styles.timerTextContainer}>
             <Text style={styles.timerText}>{formatTime(timeRemaining)}</Text>
+            <Text style={styles.timerPhase}>{phase === 'work' ? `Cycle ${currentCycle}/${totalCycles}` : 'Take a breath'}</Text>
           </View>
-        </View>
+        </Animated.View>
       </Animated.View>
 
-      {/* Controls overlay */}
-      {showControls && (
-        <Animated.View style={[styles.controlsOverlay, { opacity: controlsOpacity }]} pointerEvents="box-none">
-          <TouchableOpacity style={styles.exitBtn} onPress={handleExit}>
-            <Ionicons name="arrow-back" size={28} color="white" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.pauseBtn} onPress={handlePauseToggle}>
-            <Ionicons name={isPaused ? 'play' : 'pause'} size={32} color="white" />
-          </TouchableOpacity>
-        </Animated.View>
-      )}
+      {/* Always-visible bottom controls */}
+      <View style={styles.bottomControls}>
+        <TouchableOpacity style={styles.exitBtn} onPress={handleExit}>
+          <Ionicons name="close" size={22} color="rgba(255,255,255,0.5)" />
+        </TouchableOpacity>
 
-      {isPaused && !showControls && (
-        <View style={styles.pausedIndicator}>
+        <TouchableOpacity style={styles.pauseBtn} onPress={handlePauseToggle}>
+          <View style={styles.pauseBtnInner}>
+            <Ionicons name={isPaused ? 'play' : 'pause'} size={28} color="white" style={isPaused ? { marginLeft: 3 } : undefined} />
+          </View>
+        </TouchableOpacity>
+
+        <View style={styles.exitBtn}>
+          {/* Spacer for symmetry */}
+          <Ionicons name="musical-notes" size={22} color="rgba(255,255,255,0.3)" />
+        </View>
+      </View>
+
+      {isPaused && (
+        <View style={styles.pausedOverlay}>
           <Text style={styles.pausedText}>PAUSED</Text>
+          <Text style={styles.pausedSub}>Tap play to continue</Text>
         </View>
       )}
-    </TouchableOpacity>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'black' },
-  bgLayer: { ...StyleSheet.absoluteFillObject },
-  particlesLayer: { ...StyleSheet.absoluteFillObject },
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.2)' },
+  bgLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const,
+  particlesLayer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const,
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.25)' } as const,
   mainContent: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  header: { alignItems: 'center', position: 'absolute', top: 100 },
-  phaseLabel: { fontSize: 20, color: 'rgba(255,255,255,0.8)', letterSpacing: 2, textTransform: 'uppercase' },
+
+  header: { alignItems: 'center', position: 'absolute', top: 80 },
+  phaseLabel: {
+    fontSize: 18,
+    color: 'rgba(255,255,255,0.7)',
+    letterSpacing: 1.5,
+    fontWeight: '600',
+  },
   cyclesRow: { flexDirection: 'row', marginTop: 12, gap: 8 },
-  cycleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.3)' },
-  cycleDotFilled: { backgroundColor: 'white' },
-  timerContainer: { alignItems: 'center', justifyContent: 'center', width: 300, height: 300 },
+  cycleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.2)' },
+  cycleDotFilled: { backgroundColor: 'rgba(255,255,255,0.8)' },
+  cycleDotActive: { backgroundColor: 'white', shadowColor: 'white', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 4, elevation: 2 },
+
+  timerContainer: { alignItems: 'center', justifyContent: 'center', width: 280, height: 280 },
   timerTextContainer: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
   timerText: {
-    fontSize: 72,
+    fontSize: 56,
     color: 'white',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
-    letterSpacing: 4,
-    textShadowColor: 'rgba(255,255,255,0.3)',
+    letterSpacing: 3,
+    textShadowColor: 'rgba(255,255,255,0.15)',
     textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 10,
+    textShadowRadius: 12,
   },
-  controlsOverlay: { ...StyleSheet.absoluteFillObject, padding: 30 },
-  exitBtn: { position: 'absolute', top: 50, left: 24, width: 44, height: 44, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 22 },
-  pauseBtn: { position: 'absolute', bottom: 80, alignSelf: 'center', width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(255,255,255,0.2)', justifyContent: 'center', alignItems: 'center' },
-  pausedIndicator: { position: 'absolute', bottom: 100, alignSelf: 'center' },
-  pausedText: { color: 'rgba(255,255,255,0.5)', letterSpacing: 4, fontSize: 14, fontWeight: 'bold' },
+  timerPhase: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+    fontWeight: '600',
+    marginTop: 4,
+    letterSpacing: 0.5,
+  },
+
+  // Always-visible bottom controls
+  bottomControls: {
+    position: 'absolute',
+    bottom: 50,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-around',
+    paddingHorizontal: 40,
+  },
+  exitBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseBtn: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pauseBtnInner: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Paused overlay
+  pausedOverlay: {
+    position: 'absolute',
+    top: '40%',
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
+  pausedText: {
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 6,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  pausedSub: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+    marginTop: 6,
+  },
+
+  // Complete
   completeContent: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  completeEmoji: { fontSize: 80, marginBottom: 20 },
-  completeTitle: { fontSize: 32, fontWeight: 'bold', color: 'white', marginBottom: 12 },
-  completeStats: { fontSize: 18, color: 'rgba(255,255,255,0.8)', marginBottom: 8 },
-  ratingContainer: { marginTop: 40, alignItems: 'center' },
-  ratingLabel: { fontSize: 16, color: 'white', marginBottom: 16 },
+  completeEmoji: { fontSize: 64, marginBottom: 16 },
+  completeTitle: { fontSize: 28, fontWeight: '700', color: 'white', marginBottom: 8 },
+  completeStats: { fontSize: 16, color: 'rgba(255,255,255,0.7)', marginBottom: 8 },
+  ratingContainer: { marginTop: 32, alignItems: 'center' },
+  ratingLabel: { fontSize: 15, color: 'rgba(255,255,255,0.8)', marginBottom: 16, fontWeight: '500' },
   starsRow: { flexDirection: 'row', gap: 12 },
-  returnBtn: { marginTop: 60, backgroundColor: 'white', paddingVertical: 16, paddingHorizontal: 32, borderRadius: 16 },
-  returnBtnText: { fontSize: 18, fontWeight: 'bold', color: '#1A3A5C' },
+  returnBtn: {
+    marginTop: 40,
+    backgroundColor: 'white',
+    paddingVertical: 14,
+    paddingHorizontal: 36,
+    borderRadius: 16,
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  returnBtnText: { fontSize: 16, fontWeight: '700', color: '#0A0E16' },
 });

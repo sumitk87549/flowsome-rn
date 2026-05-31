@@ -51,6 +51,12 @@
       "@react-native-firebase/auth",
       "@react-native-google-signin/google-signin",
       "expo-build-properties"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "745a6b44-15dd-4ca9-919d-127259bf34c4"
+      }
+    }
   }
 }

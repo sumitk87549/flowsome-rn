@@ -1,63 +1,75 @@
-import React from 'react';
-import { View, StyleSheet, ViewStyle, TouchableOpacity, Animated } from 'react-native';
+import React, { useRef } from 'react';
+import { View, StyleSheet, Pressable, Animated, ViewStyle, StyleProp } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
-import * as Haptics from 'expo-haptics';
 
-interface CardProps {
+type CardProps = {
   children: React.ReactNode;
-  style?: ViewStyle | ViewStyle[];
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
-  variant?: 'surface' | 'surfaceAlt';
-}
+  variant?: 'default' | 'surfaceAlt' | 'glass' | 'glow';
+};
 
-export const Card = ({ children, style, onPress, variant = 'surface' }: CardProps) => {
+export const Card = ({ children, style, onPress, variant = 'default' }: CardProps) => {
   const { colors } = useTheme();
-  const scale = React.useRef(new Animated.Value(1)).current;
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const getVariantStyle = (): ViewStyle => {
+    switch (variant) {
+      case 'surfaceAlt':
+        return { backgroundColor: colors.surfaceAlt };
+      case 'glass':
+        return {
+          backgroundColor: colors.glassSurface,
+          borderWidth: 1,
+          borderColor: colors.glassStroke,
+        };
+      case 'glow':
+        return {
+          backgroundColor: colors.surface,
+          borderWidth: 1,
+          borderColor: colors.glassStroke,
+          shadowColor: colors.primary,
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: 0.15,
+          shadowRadius: 12,
+          elevation: 4,
+        };
+      default:
+        return { backgroundColor: colors.surface };
+    }
+  };
 
   const handlePressIn = () => {
-    if (onPress) {
-      Animated.spring(scale, {
-        toValue: 0.97,
-        useNativeDriver: true,
-      }).start();
-    }
+    Animated.spring(scaleAnim, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 4,
+    }).start();
   };
 
   const handlePressOut = () => {
-    if (onPress) {
-      Animated.spring(scale, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-    }
-  };
-
-  const handlePress = () => {
-    if (onPress) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      onPress();
-    }
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 20,
+      bounciness: 8,
+    }).start();
   };
 
   const cardStyle = [
     styles.card,
-    { backgroundColor: variant === 'surface' ? colors.surface : colors.surfaceAlt, borderColor: colors.border },
-    style
+    getVariantStyle(),
+    style,
   ];
 
   if (onPress) {
     return (
-      <Animated.View style={{ transform: [{ scale }] }}>
-        <TouchableOpacity
-          activeOpacity={1}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          onPress={handlePress}
-          style={cardStyle}
-        >
+      <Pressable onPress={onPress} onPressIn={handlePressIn} onPressOut={handlePressOut}>
+        <Animated.View style={[cardStyle, { transform: [{ scale: scaleAnim }] }]}>
           {children}
-        </TouchableOpacity>
-      </Animated.View>
+        </Animated.View>
+      </Pressable>
     );
   }
 
@@ -66,8 +78,12 @@ export const Card = ({ children, style, onPress, variant = 'surface' }: CardProp
 
 const styles = StyleSheet.create({
   card: {
-    borderRadius: 16,
+    borderRadius: 20,
     padding: 16,
-    borderWidth: 1,
-  }
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
 });

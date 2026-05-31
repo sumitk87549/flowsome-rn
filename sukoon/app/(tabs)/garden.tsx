@@ -1,130 +1,152 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
-import { StreakBanner } from '../../components/home/StreakBanner';
 import Svg, { Circle, Path, Polyline } from 'react-native-svg';
 import { useUserStore } from '../../stores/userStore';
 import { useSessionStore } from '../../stores/sessionStore';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function GardenScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  
+
   const { streak, totalSessions, moodHistory, weeklyActivity } = useUserStore();
   const { getTotalMinutes, getAllSessions } = useSessionStore();
-  
-  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const ringScale = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+        Animated.timing(pulseAnim, { toValue: 1.15, duration: 1200, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
       ])
     ).start();
+
+    // Spring animation for mandala on mount
+    Animated.spring(ringScale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 8,
+      bounciness: 12,
+    }).start();
   }, []);
 
-  // Mandala growth calculation
-  const rings = Math.min(Math.floor(totalSessions / 5) + 1, 5); // Max 5 rings
-  const opacity = Math.min(0.2 + (totalSessions * 0.05), 1);
+  const rings = Math.min(Math.floor(totalSessions / 5) + 1, 5);
+  const opacity = Math.min(0.3 + (totalSessions * 0.05), 1);
 
-  // Weekly Heatmap Data
+  // Weekly Heatmap
   const getHeatmapColors = () => {
     const today = new Date();
     const days = [];
     const oneDay = 24 * 60 * 60 * 1000;
-    
+
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today.getTime() - i * oneDay);
       const dayStr = d.toDateString();
       const count = weeklyActivity[dayStr] || 0;
-      
+
       let color = colors.border;
-      if (count === 1) color = '#A5D6A7';
-      if (count === 2) color = '#66BB6A';
-      if (count >= 3) color = '#2E7D32';
-      
-      days.push({ id: dayStr, label: d.toLocaleDateString('en-US', { weekday: 'short' })[0], color });
+      let glow = false;
+      if (count === 1) { color = '#66BB6A'; }
+      if (count === 2) { color = '#43A047'; glow = true; }
+      if (count >= 3) { color = '#2E7D32'; glow = true; }
+
+      days.push({
+        id: dayStr,
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0),
+        color,
+        glow,
+        count,
+        isToday: i === 0,
+      });
     }
     return days;
   };
 
-  // Mood trend (0-4 mapping)
+  // Mood trend
   const getMoodPoints = () => {
-    // Only get recent 7 moods
     const recent = [...moodHistory].slice(-7);
     if (recent.length === 0) return "";
-    
     const stepX = 200 / (Math.max(recent.length - 1, 1));
     const points = recent.map((m, i) => {
       const x = i * stepX;
-      // mood 1-5 maps to y 80-20
       const y = 80 - ((m.mood - 1) * 15);
       return `${x},${y}`;
     });
     return points.join(' ');
   };
 
-  const sessions = getAllSessions().slice(0, 10);
+  const sessions = getAllSessions().slice(0, 5);
   const totalMins = getTotalMinutes();
+
+  const getSessionIcon = (type: string) => {
+    if (type === 'focus') return { icon: 'timer', color: '#F4A44A' };
+    if (type === 'breathe') return { icon: 'leaf', color: '#4DB896' };
+    return { icon: 'moon', color: '#A855F7' };
+  };
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <ScreenHeader 
-        title={t('nav_garden')} 
+      <ScreenHeader
+        title={t('nav_garden')}
         rightIcon={
-          <View style={{ flexDirection: 'row', gap: 16 }}>
-            <Ionicons name="time-outline" size={24} color={colors.textPrimary} onPress={() => router.push('/history')} />
-            <Ionicons name="notifications-outline" size={24} color={colors.textPrimary} onPress={() => router.push('/settings/notifications')} />
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <Ionicons name="time-outline" size={20} color={colors.textSecondary} onPress={() => router.push('/history')} />
           </View>
         }
       />
-      <ScrollView contentContainerStyle={styles.container}>
-        
-        {/* Streak Gamification */}
-        <View style={[styles.streakCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Animated.Text style={[styles.fireEmoji, { transform: [{ scale: pulseAnim }] }]}>🔥</Animated.Text>
-          <View style={styles.streakTextContainer}>
-            <Text style={[styles.streakTitle, { color: colors.textPrimary }]}>{streak} Day Streak</Text>
-            <Text style={[styles.streakSub, { color: colors.textSecondary }]}>
-              {streak > 0 ? "You're doing great! Keep the momentum." : "Start a session today to build your streak."}
-            </Text>
-          </View>
-        </View>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
 
-        {/* Quick Stats */}
-        <View style={[styles.statsRow, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{totalSessions}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Sessions</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{totalMins}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Minutes</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: colors.textPrimary }]}>{streak}</Text>
-            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Best Streak</Text>
-          </View>
+        {/* Stats Row */}
+        <View style={styles.statsRow}>
+          {[
+            { value: streak, label: 'Streak', emoji: '🔥' },
+            { value: totalSessions, label: 'Sessions', emoji: '🧘' },
+            { value: totalMins, label: 'Minutes', emoji: '⏱️' },
+          ].map((stat, i) => (
+            <View key={i} style={[styles.statCard, { backgroundColor: colors.surface }]}>
+              <Text style={styles.statEmoji}>{stat.emoji}</Text>
+              <Text style={[styles.statValue, { color: colors.textPrimary }]}>{stat.value}</Text>
+              <Text style={[styles.statLabel, { color: colors.textTertiary }]}>{stat.label}</Text>
+            </View>
+          ))}
         </View>
 
         {/* Weekly Heatmap */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Weekly Consistency</Text>
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>This Week</Text>
+          <View style={[styles.heatmapCard, { backgroundColor: colors.surface }]}>
             <View style={styles.heatmapRow}>
               {getHeatmapColors().map((day, i) => (
                 <View key={i} style={styles.heatmapItem}>
-                  <View style={[styles.heatmapBox, { backgroundColor: day.color }]} />
-                  <Text style={[styles.heatmapLabel, { color: colors.textTertiary }]}>{day.label}</Text>
+                  <View style={[
+                    styles.heatmapBox,
+                    { backgroundColor: day.color },
+                    day.glow && {
+                      shadowColor: day.color,
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.4,
+                      shadowRadius: 6,
+                      elevation: 3,
+                    },
+                    day.isToday && { borderWidth: 2, borderColor: colors.primary },
+                  ]}>
+                    {day.count > 0 && (
+                      <Text style={styles.heatmapCount}>{day.count}</Text>
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.heatmapLabel,
+                    { color: day.isToday ? colors.primary : colors.textTertiary }
+                  ]}>{day.label}</Text>
                 </View>
               ))}
             </View>
@@ -133,106 +155,115 @@ export default function GardenScreen() {
 
         {/* Mandala Garden */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Mandala Garden</Text>
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, alignItems: 'center', paddingVertical: 40 }]}>
-            <Svg height="200" width="200" viewBox="0 0 100 100">
-              {/* Core */}
-              <Circle cx="50" cy="50" r="10" fill={colors.primary} opacity={opacity} />
-              
-              {/* Rings */}
-              {Array.from({ length: rings }).map((_, i) => (
-                <React.Fragment key={i}>
-                  <Circle cx="50" cy="50" r={20 + (i * 10)} stroke={colors.primary} strokeWidth="1" fill="none" opacity={opacity - (i * 0.1)} />
-                  {Array.from({ length: 8 + (i * 4) }).map((_, j) => {
-                    const angle = (j * 360) / (8 + (i * 4));
-                    return (
-                      <Path
-                        key={`petal-${i}-${j}`}
-                        d={`M 50 ${50 - (10 + (i * 10))} Q 55 ${50 - (20 + (i * 10))} 50 ${50 - (30 + (i * 10))} Q 45 ${50 - (20 + (i * 10))} 50 ${50 - (10 + (i * 10))}`}
-                        stroke={colors.primary}
-                        strokeWidth="0.5"
-                        fill="none"
-                        opacity={opacity}
-                        transform={`rotate(${angle} 50 50)`}
-                      />
-                    );
-                  })}
-                </React.Fragment>
-              ))}
-            </Svg>
-            <Text style={[styles.mandalaText, { color: colors.textSecondary }]}>
-              {totalSessions === 0 ? "Complete sessions to grow your garden" : `Garden Level ${rings} • Evolving`}
+          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Your Garden</Text>
+          <View style={[styles.mandalaCard, { backgroundColor: colors.surface }]}>
+            <Animated.View style={{ transform: [{ scale: ringScale }] }}>
+              <Svg height="180" width="180" viewBox="0 0 100 100">
+                <Circle cx="50" cy="50" r="8" fill={colors.primary} opacity={opacity} />
+                {Array.from({ length: rings }).map((_, i) => (
+                  <React.Fragment key={i}>
+                    <Circle
+                      cx="50" cy="50" r={18 + (i * 8)}
+                      stroke={colors.primary}
+                      strokeWidth="0.8"
+                      fill="none"
+                      opacity={opacity - (i * 0.12)}
+                    />
+                    {Array.from({ length: 6 + (i * 3) }).map((_, j) => {
+                      const angle = (j * 360) / (6 + (i * 3));
+                      return (
+                        <Path
+                          key={`petal-${i}-${j}`}
+                          d={`M 50 ${50 - (10 + (i * 8))} Q 54 ${50 - (18 + (i * 8))} 50 ${50 - (26 + (i * 8))} Q 46 ${50 - (18 + (i * 8))} 50 ${50 - (10 + (i * 8))}`}
+                          stroke={colors.primary}
+                          strokeWidth="0.4"
+                          fill="none"
+                          opacity={opacity}
+                          transform={`rotate(${angle} 50 50)`}
+                        />
+                      );
+                    })}
+                  </React.Fragment>
+                ))}
+              </Svg>
+            </Animated.View>
+            <Text style={[styles.mandalaLevel, { color: colors.textSecondary }]}>
+              {totalSessions === 0 ? 'Complete sessions to grow' : `Level ${rings} · ${5 * rings - totalSessions > 0 ? `${5 * rings - totalSessions} sessions to next level` : 'Evolving'}`}
             </Text>
           </View>
         </View>
 
         {/* Mood Trend */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Recent Mood Trend</Text>
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, height: 120 }]}>
-            {moodHistory.length > 1 ? (
-              <Svg height="100%" width="100%" viewBox="0 0 200 100" preserveAspectRatio="none">
+        {moodHistory.length > 1 && (
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>Mood Trend</Text>
+            <View style={[styles.moodCard, { backgroundColor: colors.surface }]}>
+              <Svg height="80" width="100%" viewBox="0 0 200 100" preserveAspectRatio="none">
                 <Polyline
                   points={getMoodPoints()}
                   fill="none"
-                  stroke={colors.accent}
-                  strokeWidth="3"
+                  stroke={colors.primary}
+                  strokeWidth="2.5"
+                  strokeLinejoin="round"
                 />
-                {/* Draw points */}
                 {getMoodPoints().split(' ').map((pt, i) => (
-                  <Circle key={i} cx={pt.split(',')[0]} cy={pt.split(',')[1]} r="4" fill={colors.background} stroke={colors.accent} strokeWidth="2" />
+                  <Circle
+                    key={i}
+                    cx={pt.split(',')[0]}
+                    cy={pt.split(',')[1]}
+                    r="3.5"
+                    fill={colors.background}
+                    stroke={colors.primary}
+                    strokeWidth="2"
+                  />
                 ))}
               </Svg>
-            ) : (
-              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-                <Text style={{ color: colors.textSecondary }}>Log more moods to see trends</Text>
-              </View>
-            )}
+            </View>
           </View>
-        </View>
+        )}
 
-        {/* Recent Sessions Preview */}
-        <View style={styles.section}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>Recent Sessions</Text>
-            <TouchableOpacity onPress={() => router.push('/history')}>
-              <Text style={{ color: colors.primary, fontWeight: '600' }}>View All</Text>
-            </TouchableOpacity>
-          </View>
-          
-          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border, padding: 0, overflow: 'hidden' }]}>
-            {sessions.length === 0 ? (
-              <View style={{ padding: 20, alignItems: 'center' }}>
-                <Text style={{ color: colors.textSecondary }}>No sessions yet.</Text>
-              </View>
-            ) : (
-              sessions.map((s, index) => {
-                let title = '';
-                let color = '';
-                if (s.type === 'focus') { title = `Focus: ${s.mode}`; color = '#F4A44A'; }
-                if (s.type === 'breathe') { title = `Breathing`; color = '#2D8B6F'; }
-                if (s.type === 'meditate') { title = `Meditation`; color = '#A855F7'; }
+        {/* Recent Sessions */}
+        {sessions.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary, marginBottom: 0 }]}>Recent</Text>
+              <TouchableOpacity onPress={() => router.push('/history')}>
+                <Text style={[styles.viewAll, { color: colors.primary }]}>View All</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={[styles.sessionsCard, { backgroundColor: colors.surface }]}>
+              {sessions.map((s, index) => {
+                const { icon, color } = getSessionIcon(s.type);
+                const title = s.type === 'focus' ? `Focus · ${s.mode}` :
+                              s.type === 'breathe' ? 'Breathing' : 'Meditation';
+                const duration = s.type === 'focus' ? s.actualDuration :
+                                s.type === 'breathe' ? Math.round(s.duration / 60) : s.duration;
 
                 return (
-                  <View key={s.id} style={[styles.sessionItem, index < sessions.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={[styles.dot, { backgroundColor: color }]} />
+                  <View key={s.id} style={[
+                    styles.sessionItem,
+                    index < sessions.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border }
+                  ]}>
+                    <View style={styles.sessionLeft}>
+                      <View style={[styles.sessionIconBg, { backgroundColor: `${color}18` }]}>
+                        <Ionicons name={icon as any} size={16} color={color} />
+                      </View>
                       <View>
                         <Text style={[styles.sessionTitle, { color: colors.textPrimary }]}>{title}</Text>
-                        <Text style={[styles.sessionDate, { color: colors.textTertiary }]}>{new Date(s.startTime).toLocaleDateString()}</Text>
+                        <Text style={[styles.sessionDate, { color: colors.textTertiary }]}>
+                          {new Date(s.startTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </Text>
                       </View>
                     </View>
-                    <Text style={[styles.sessionDuration, { color: colors.textSecondary }]}>
-                      {s.type === 'focus' ? s.actualDuration : s.type === 'breathe' ? Math.round(s.duration/60) : s.duration}m
-                    </Text>
+                    <Text style={[styles.sessionDuration, { color: colors.textSecondary }]}>{duration}m</Text>
                   </View>
                 );
-              })
-            )}
+              })}
+            </View>
           </View>
-        </View>
+        )}
 
-        <View style={{ height: 40 }} />
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -241,46 +272,67 @@ export default function GardenScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { padding: 20 },
-  
-  streakCard: {
-    flexDirection: 'row',
+
+  // Stats
+  statsRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statCard: {
+    flex: 1,
+    borderRadius: 16,
+    padding: 14,
     alignItems: 'center',
-    padding: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginBottom: 20,
   },
-  fireEmoji: { fontSize: 32, marginRight: 16 },
-  streakTextContainer: { flex: 1 },
-  streakTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 4 },
-  streakSub: { fontSize: 12 },
+  statEmoji: { fontSize: 20, marginBottom: 4 },
+  statValue: { fontSize: 22, fontWeight: '700' },
+  statLabel: { fontSize: 10, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
 
-  statsRow: {
-    flexDirection: 'row',
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    marginBottom: 24,
-  },
-  statItem: { flex: 1, alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  statLabel: { fontSize: 12, textAlign: 'center' },
-  statDivider: { width: 1, backgroundColor: 'rgba(0,0,0,0.1)', marginHorizontal: 12 },
+  // Sections
+  section: { marginBottom: 20 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', marginBottom: 10 },
+  sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  viewAll: { fontSize: 13, fontWeight: '600' },
 
-  section: { marginBottom: 24 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 12 },
-  card: { borderRadius: 16, padding: 16, borderWidth: 1 },
-
+  // Heatmap
+  heatmapCard: { borderRadius: 16, padding: 16 },
   heatmapRow: { flexDirection: 'row', justifyContent: 'space-between' },
   heatmapItem: { alignItems: 'center', gap: 6 },
-  heatmapBox: { width: 32, height: 32, borderRadius: 8 },
-  heatmapLabel: { fontSize: 10, fontWeight: 'bold' },
+  heatmapBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heatmapCount: { color: 'white', fontSize: 11, fontWeight: '700' },
+  heatmapLabel: { fontSize: 10, fontWeight: '700' },
 
-  mandalaText: { fontStyle: 'italic', marginTop: 20, fontSize: 14 },
+  // Mandala
+  mandalaCard: {
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  mandalaLevel: { fontSize: 13, fontWeight: '500', marginTop: 12, fontStyle: 'italic' },
 
-  sessionItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  dot: { width: 12, height: 12, borderRadius: 6 },
-  sessionTitle: { fontWeight: '600', fontSize: 16, marginBottom: 2 },
-  sessionDate: { fontSize: 12 },
-  sessionDuration: { fontWeight: 'bold' },
+  // Mood
+  moodCard: { borderRadius: 16, padding: 16, height: 110 },
+
+  // Sessions
+  sessionsCard: { borderRadius: 16, overflow: 'hidden' },
+  sessionItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+  },
+  sessionLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  sessionIconBg: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sessionTitle: { fontSize: 14, fontWeight: '600', marginBottom: 1 },
+  sessionDate: { fontSize: 11, fontWeight: '500' },
+  sessionDuration: { fontSize: 15, fontWeight: '700' },
 });

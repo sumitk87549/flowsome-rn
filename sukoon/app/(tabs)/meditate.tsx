@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useTranslation } from '../../hooks/useTranslation';
 import { ScreenHeader } from '../../components/ui/ScreenHeader';
-import { Card } from '../../components/ui/Card';
-import { Badge } from '../../components/ui/Badge';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -14,12 +12,11 @@ import { MEDITATIONS } from '../../constants/meditations';
 import { PaywallModal } from '../../components/PaywallModal';
 import { usePremiumGate } from '../../hooks/usePremiumGate';
 
-const DURATIONS = ['All', '5 min', '10 min', '15 min', '20+ min'];
 const CATEGORIES = [
-  { id: 'all', label: 'All', emoji: '⭐' },
+  { id: 'all', label: 'All', emoji: '✨' },
   { id: 'sleep', label: 'Sleep', emoji: '🌙' },
   { id: 'focus', label: 'Focus', emoji: '🎯' },
-  { id: 'stress', label: 'Stress Relief', emoji: '🔥' },
+  { id: 'stress', label: 'Stress', emoji: '🧘' },
   { id: 'morning', label: 'Morning', emoji: '🌅' },
 ];
 
@@ -27,10 +24,8 @@ export default function MeditateScreen() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const router = useRouter();
-  
   const { hasAccess } = usePremiumGate();
-  
-  const [selectedDuration, setSelectedDuration] = useState('All');
+
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [language, setLanguage] = useState<'en' | 'hi'>('en');
   const [paywallVisible, setPaywallVisible] = useState(false);
@@ -58,7 +53,7 @@ export default function MeditateScreen() {
     });
   };
 
-  // Get featured session based on time of day
+  // Featured session based on time
   const getFeaturedSession = () => {
     const hour = new Date().getHours();
     let id = '';
@@ -66,101 +61,85 @@ export default function MeditateScreen() {
     else if (hour >= 11 && hour < 17) id = 'single-point';
     else if (hour >= 17 && hour < 21) id = 'stress-debrief';
     else id = 'body-scan';
-    
     return MEDITATIONS.find(m => m.id === id) || MEDITATIONS[0];
   };
 
   const featured = getFeaturedSession();
 
-  // Filter meditations
+  // Filter
   const filteredMeditations = MEDITATIONS.filter(m => {
-    // Category match
     if (selectedCategory !== 'all' && m.category !== selectedCategory) return false;
-    
-    // Duration match
-    if (selectedDuration !== 'All') {
-      if (selectedDuration === '5 min' && m.duration > 5) return false;
-      if (selectedDuration === '10 min' && (m.duration <= 5 || m.duration > 10)) return false;
-      if (selectedDuration === '15 min' && (m.duration <= 10 || m.duration > 15)) return false;
-      if (selectedDuration === '20+ min' && m.duration <= 15) return false;
-    }
     return true;
   });
 
-  const getCategoryColors = (catId: string) => {
+  const getCategoryGradient = (catId: string): [string, string] => {
     switch (catId) {
       case 'sleep': return ['#2A1A4A', '#1A0B2E'];
       case 'focus': return ['#1A3A4A', '#0B222E'];
-      case 'stress': return ['#4A2A2A', '#2E0B0B'];
-      case 'morning': return ['#4A3B1A', '#2E220B'];
-      default: return ['#2A3A4A', '#1A222E'];
+      case 'stress': return ['#3A2020', '#2E1515'];
+      case 'morning': return ['#3A2B10', '#2E1E08'];
+      default: return ['#1A2530', '#0E1520'];
     }
   };
 
   const LanguageToggle = () => (
-    <TouchableOpacity onPress={toggleLanguage} style={[styles.langToggle, { borderColor: colors.border }]}>
-      <Text style={[styles.langText, { color: language === 'hi' ? colors.primary : colors.textTertiary, fontWeight: language === 'hi' ? 'bold' : 'normal' }]}>हिं</Text>
-      <View style={[styles.langDivider, { backgroundColor: colors.border }]} />
-      <Text style={[styles.langText, { color: language === 'en' ? colors.primary : colors.textTertiary, fontWeight: language === 'en' ? 'bold' : 'normal' }]}>EN</Text>
+    <TouchableOpacity onPress={toggleLanguage}>
+      <View style={[styles.langToggle, { borderColor: colors.border }]}>
+        <Text style={[styles.langText, { color: language === 'hi' ? colors.primary : colors.textTertiary, fontWeight: language === 'hi' ? '700' : '400' }]}>हिं</Text>
+        <View style={[styles.langDivider, { backgroundColor: colors.border }]} />
+        <Text style={[styles.langText, { color: language === 'en' ? colors.primary : colors.textTertiary, fontWeight: language === 'en' ? '700' : '400' }]}>EN</Text>
+      </View>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
       <ScreenHeader title={t('nav_meditate')} rightIcon={<LanguageToggle />} />
-      <ScrollView contentContainerStyle={styles.container}>
-        
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+
         {/* Featured Card */}
-        <TouchableOpacity style={styles.featuredContainer} onPress={() => handlePress(featured.id, featured.free)}>
+        <TouchableOpacity style={styles.featuredContainer} onPress={() => handlePress(featured.id, featured.free)} activeOpacity={0.9}>
           <LinearGradient
-            colors={['#2D8B6F', '#1C604B']}
+            colors={['#2D8B6F', '#1A5C49']}
             style={styles.featuredCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
+            <View style={styles.featuredBadge}>
+              <Text style={styles.featuredBadgeText}>✦ DAILY PICK</Text>
+            </View>
             <View style={styles.featuredContent}>
-              <View>
-                <Badge label="Daily Pick" color="white" style={{ alignSelf: 'flex-start', marginBottom: 8 }} />
+              <View style={styles.featuredTextArea}>
                 <Text style={styles.featuredTitle}>{language === 'en' ? featured.title : featured.titleHi}</Text>
-                <Text style={styles.featuredDuration}>{featured.duration} min • {featured.category}</Text>
+                <Text style={styles.featuredMeta}>{featured.duration} min · {featured.category} · {featured.level}</Text>
               </View>
               <View style={styles.playCircle}>
-                <Ionicons name="play" size={24} color="#2D8B6F" style={{ marginLeft: 3 }} />
+                <Ionicons name="play" size={22} color="#2D8B6F" style={{ marginLeft: 2 }} />
               </View>
             </View>
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Duration Filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-          {DURATIONS.map(dur => (
+        {/* Category Filter (single row, merged) */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll} contentContainerStyle={styles.filtersContent}>
+          {CATEGORIES.map(cat => (
             <TouchableOpacity
-              key={dur}
+              key={cat.id}
               style={[
-                styles.pill,
-                { 
-                  backgroundColor: selectedDuration === dur ? colors.primary : 'transparent',
-                  borderColor: selectedDuration === dur ? colors.primary : colors.border
+                styles.filterPill,
+                {
+                  backgroundColor: selectedCategory === cat.id ? colors.primarySoft : 'transparent',
+                  borderColor: selectedCategory === cat.id ? colors.primary : colors.border,
                 }
               ]}
-              onPress={() => setSelectedDuration(dur)}
+              onPress={() => setSelectedCategory(cat.id)}
+              activeOpacity={0.7}
             >
+              <Text style={styles.filterEmoji}>{cat.emoji}</Text>
               <Text style={[
-                styles.pillText,
-                { color: selectedDuration === dur ? 'white' : colors.textPrimary }
-              ]}>{dur}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Category Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.horizontalScroll}>
-          {CATEGORIES.map(cat => (
-            <TouchableOpacity key={cat.id} onPress={() => setSelectedCategory(cat.id)}>
-              <Card style={[styles.catCard, { borderColor: selectedCategory === cat.id ? colors.primary : colors.border }]}>
-                <Text style={styles.catEmoji}>{cat.emoji}</Text>
-                <Text style={[styles.catLabel, { color: colors.textPrimary }]}>{cat.label}</Text>
-              </Card>
+                styles.filterText,
+                { color: selectedCategory === cat.id ? colors.primary : colors.textPrimary }
+              ]}>{cat.label}</Text>
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -168,23 +147,33 @@ export default function MeditateScreen() {
         {/* Meditation Grid */}
         <View style={styles.grid}>
           {filteredMeditations.map(item => (
-            <TouchableOpacity key={item.id} style={styles.gridItem} onPress={() => handlePress(item.id, item.free)}>
+            <TouchableOpacity key={item.id} style={styles.gridItem} onPress={() => handlePress(item.id, item.free)} activeOpacity={0.85}>
               <LinearGradient
-                colors={getCategoryColors(item.category) as [string, string]}
+                colors={getCategoryGradient(item.category)}
                 style={styles.medCard}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
               >
                 <View style={styles.medTop}>
-                  <Badge label={`${item.duration}m`} color="rgba(255,255,255,0.2)" />
-                  {!item.free && <Ionicons name="lock-closed" size={16} color="rgba(255,255,255,0.7)" />}
-                  {item.free && <Badge label="FREE" color="#F4A44A" />}
+                  <View style={[styles.durationBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                    <Text style={styles.durationText}>{item.duration}m</Text>
+                  </View>
+                  {!item.free && !hasAccess ? (
+                    <View style={styles.lockIcon}>
+                      <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.5)" />
+                    </View>
+                  ) : item.free ? (
+                    <View style={[styles.freeBadge, { backgroundColor: 'rgba(244,164,74,0.2)' }]}>
+                      <Text style={styles.freeText}>FREE</Text>
+                    </View>
+                  ) : null}
                 </View>
-                
+
                 <View style={styles.medBottom}>
-                  <Text style={styles.medTitle} numberOfLines={2}>{item.title}</Text>
-                  <Text style={styles.medTitleHi} numberOfLines={1}>{item.titleHi}</Text>
-                  <View style={styles.medMetaRow}>
+                  <Text style={styles.medTitle} numberOfLines={2}>
+                    {language === 'en' ? item.title : item.titleHi}
+                  </Text>
+                  <View style={styles.medMeta}>
                     <View style={[styles.levelDot, { backgroundColor: item.level === 'beginner' ? '#A5D6A7' : '#FFCC80' }]} />
                     <Text style={styles.medLevel}>{item.level}</Text>
                   </View>
@@ -196,11 +185,12 @@ export default function MeditateScreen() {
 
         {filteredMeditations.length === 0 && (
           <View style={styles.emptyState}>
-            <Text style={{ fontSize: 40, marginBottom: 12 }}>🧘</Text>
-            <Text style={[styles.emptyStateText, { color: colors.textSecondary }]}>No sessions found for this combination.</Text>
+            <Text style={{ fontSize: 36, marginBottom: 8 }}>🧘</Text>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No sessions match this filter.</Text>
           </View>
         )}
 
+        <View style={{ height: 20 }} />
       </ScrollView>
 
       <PaywallModal visible={paywallVisible} onClose={() => setPaywallVisible(false)} />
@@ -210,81 +200,92 @@ export default function MeditateScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
-  container: { paddingBottom: 40 },
+  container: { paddingBottom: 20 },
+
+  // Language toggle
   langToggle: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
-  langText: { fontSize: 12 },
-  langDivider: { width: 1, height: 12, marginHorizontal: 6 },
-  
-  featuredContainer: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8 },
+  langText: { fontSize: 11 },
+  langDivider: { width: 1, height: 10, marginHorizontal: 5 },
+
+  // Featured
+  featuredContainer: { paddingHorizontal: 20, paddingBottom: 16 },
   featuredCard: {
-    height: 140,
-    borderRadius: 24,
+    borderRadius: 22,
     padding: 20,
-    justifyContent: 'center',
+    minHeight: 130,
+  },
+  featuredBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    marginBottom: 12,
+  },
+  featuredBadgeText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
   },
   featuredContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  featuredTitle: { color: 'white', fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
-  featuredDuration: { color: 'rgba(255,255,255,0.8)', fontSize: 14 },
+  featuredTextArea: { flex: 1, paddingRight: 16 },
+  featuredTitle: { color: 'white', fontSize: 20, fontWeight: '700', marginBottom: 4 },
+  featuredMeta: { color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '500' },
   playCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
     backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
     elevation: 4,
   },
-  
-  horizontalScroll: { paddingHorizontal: 20, paddingVertical: 8, flexGrow: 0 },
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    marginRight: 12,
-  },
-  pillText: { fontWeight: '600' },
-  catCard: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    marginRight: 12,
-    alignItems: 'center',
+
+  // Filters (single row)
+  filtersScroll: { flexGrow: 0, marginBottom: 16 },
+  filtersContent: { paddingHorizontal: 20, gap: 8 },
+  filterPill: {
     flexDirection: 'row',
-    gap: 8,
-    borderWidth: 1,
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    gap: 5,
   },
-  catEmoji: { fontSize: 18 },
-  catLabel: { fontWeight: '600' },
-  
+  filterEmoji: { fontSize: 14 },
+  filterText: { fontWeight: '600', fontSize: 13 },
+
+  // Grid
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: 14,
-    marginTop: 8,
   },
   gridItem: {
     width: '50%',
     padding: 6,
   },
   medCard: {
-    height: 160,
+    height: 155,
     borderRadius: 20,
-    padding: 16,
+    padding: 14,
     justifyContent: 'space-between',
   },
   medTop: {
@@ -292,13 +293,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  durationBadge: { borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  durationText: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '700' },
+  lockIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  freeBadge: { borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
+  freeText: { color: '#F4A44A', fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+
   medBottom: {},
-  medTitle: { color: 'white', fontWeight: 'bold', fontSize: 16, marginBottom: 2 },
-  medTitleHi: { color: 'rgba(255,255,255,0.7)', fontSize: 12, fontStyle: 'italic', marginBottom: 6 },
-  medMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  medTitle: { color: 'white', fontWeight: '700', fontSize: 15, marginBottom: 4, lineHeight: 20 },
+  medMeta: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   levelDot: { width: 6, height: 6, borderRadius: 3 },
-  medLevel: { color: 'rgba(255,255,255,0.6)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 },
-  
+  medLevel: { color: 'rgba(255,255,255,0.5)', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: '600' },
+
   emptyState: { alignItems: 'center', justifyContent: 'center', paddingVertical: 40 },
-  emptyStateText: { textAlign: 'center' }
+  emptyText: { textAlign: 'center', fontSize: 14 },
 });
